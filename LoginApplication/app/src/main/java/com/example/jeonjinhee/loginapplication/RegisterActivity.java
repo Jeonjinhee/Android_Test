@@ -1,99 +1,156 @@
 package com.example.jeonjinhee.loginapplication;
 
+/**
+ * Created by JeonJinhee on 2017-06-25.
+ */
+import android.app.ProgressDialog;
 import android.content.Intent;
-import android.support.v7.app.AlertDialog;
-import android.support.v7.app.AppCompatActivity;
+import android.os.AsyncTask;
 import android.os.Bundle;
+import android.support.v7.app.AppCompatActivity;
+import android.util.Log;
 import android.view.View;
 import android.widget.*;
 
-import com.android.volley.RequestQueue;
-import com.android.volley.Response;
-import com.android.volley.toolbox.Volley;
+import com.android.volley.toolbox.StringRequest;
 
-import org.json.JSONException;
-import org.json.JSONObject;
+import java.io.BufferedReader;
 
-import java.util.ArrayList;
+import java.io.InputStream;
+import java.io.InputStreamReader;
+import java.io.OutputStream;
 
-public class RegisterActivity extends AppCompatActivity implements AdapterView.OnItemSelectedListener {
-    ArrayList<String> addressList;
+import java.net.HttpURLConnection;
+import java.net.URL;
+
+public class RegisterActivity extends AppCompatActivity {
+
+    private static String TAG = "phptext_MainActivity";
+
+    private EditText mEditTextId;   //학번/사번
+    private EditText mEditTextPassword; //비밀번호
+    private EditText mEditTextAddress;  //거주관
+    private TextView mTextViewResult;   //결과메시지
+
     @Override
     protected void onCreate(Bundle savedInstanceState) {
         super.onCreate(savedInstanceState);
         setContentView(R.layout.activity_register);
 
-        addressList = new ArrayList<String>();  //거주관 목록
-        addressList.add("예솔관");
-        addressList.add("소울관");
-        addressList.add("다솔관");
-        addressList.add("은솔관");
+        mEditTextId = (EditText)findViewById(R.id.editText_register_id);    //id 값을 받아옴
+        mEditTextPassword = (EditText)findViewById(R.id.editText_register_password);    //비밀번호 값을 받아옴
+        mEditTextAddress =  (EditText)findViewById(R.id.editText_register_address); //거주관 값을 받아옴
+        mTextViewResult = (TextView)findViewById(R.id.textView_register_result);
 
-        ArrayAdapter<String> adapter = new ArrayAdapter<String>(this,
-                android.R.layout.simple_spinner_dropdown_item, addressList);
-        //스피너 속성
-        final Spinner sp = (Spinner) this.findViewById(R.id.addressSpinner);
-        sp.setAdapter(adapter);
-        sp.setOnItemSelectedListener(this);
-
-        final EditText idText = (EditText) findViewById(R.id.idText);   //아이디 입력
-        final EditText passwordText = (EditText) findViewById(R.id.passwordText);   //비밀번호 입력
-        final Button registerButton = (Button) findViewById(R.id.registerButton);   //거주관 선택
-        final String isAdmin = "";   //초기 가입자는 관리자가 아님
-
-        //회원 가입 버튼 클릭 이벤트
-        registerButton.setOnClickListener(new View.OnClickListener() {
-            @Override
+        Button buttonInsert = (Button)findViewById(R.id.button_register_insert);
+        buttonInsert.setOnClickListener(new View.OnClickListener() {    //버튼 클릭시시
+           @Override
             public void onClick(View v) {
-                String userId = idText.getText().toString();
-                String userPassword = passwordText.getText().toString();
-                String UserAddress = sp.getSelectedItem().toString();
 
+                String userId = mEditTextId.getText().toString();
+                String userPassword = mEditTextPassword.getText().toString();
+                String userAddress = mEditTextAddress.getText().toString();
+                String result = mTextViewResult.getText().toString();
 
-                Response.Listener<String> responseListener = new Response.Listener<String>(){
-                    @Override
-                    public void onResponse(String response) {
-                        Toast.makeText(getApplicationContext(), "성공", Toast.LENGTH_SHORT).show();
-                        JSONObject jsonResponse = null;
-
-                        try {
-                            jsonResponse = new JSONObject(response);
-                            boolean success = jsonResponse.getBoolean("success");
-
-                            //회원가입 성공했을 경우
-                            if(success){
-                                AlertDialog.Builder builder = new AlertDialog.Builder(RegisterActivity.this);
-                                builder.setMessage("회원가입 성공").setPositiveButton("확인", null).create().show();
-
-                                Intent registerIntent = new Intent(getApplicationContext(), LoginActivity.class);    //로그인인화면으로 이동
-                                startActivity(registerIntent);
-                            }
-                            //회원가입 실패했을 경우우
-                           else{
-                                AlertDialog.Builder builder = new AlertDialog.Builder(RegisterActivity.this);
-                                builder.setMessage("회원가입 실패").setNegativeButton("확인", null).create().show();
-                            }
-                        } catch (JSONException e) {
-                            e.printStackTrace();
-                        }
-                    }
-                };
-                //회원가입 신청
-                RegisterRequest registerRequest = new RegisterRequest(userId, userPassword, UserAddress, isAdmin, responseListener);
-                RequestQueue queue = Volley.newRequestQueue(RegisterActivity.this);
-                queue.add(registerRequest);
+                InsertData task = new InsertData(); //데이터 삽입
+                task.execute(userId, userPassword, userAddress);    //실행
             }
         });
     }
 
-    @Override
-    public void onItemSelected(AdapterView<?> parent, View view, int position, long id) {
-        //Toast.makeText(this, addressList.get(position), Toast.LENGTH_LONG).show(); //해당 항목 눌렸을때
+
+    class InsertData extends AsyncTask<String, Void, String>{   //별도의 스레드로 동작
+        ProgressDialog progressDialog;
+
+        @Override
+        protected void onPreExecute() {
+            super.onPreExecute();   //Background 작업이 끝난 후 UI 작업을 진행
+
+            progressDialog = ProgressDialog.show(RegisterActivity.this, //로딩중 표시
+                    "Please Wait", null, true, true);
+        }
+
+
+        @Override
+        protected void onPostExecute(String result) {
+            super.onPostExecute(result);
+            progressDialog.dismiss();   //로딩 종료
+            mTextViewResult.setText(result);    //결과 표시
+
+            if(result.equals("SQL문 처리 성공")){    //가입이 성공하면
+                Toast.makeText(getApplicationContext(), "회원가입 성공", Toast.LENGTH_SHORT).show();   //가입 성공 메시지 출력
+                Intent mainIntent = new Intent(getApplicationContext(), MainActivity.class);   //메인 페이지로 이동
+                startActivity(mainIntent);
+            }
+            else{
+                Toast.makeText(getApplicationContext(), "회원가입 실패", Toast.LENGTH_SHORT).show();   //가입 실패 메시지 출력
+
+                mEditTextId.setText("");
+                mEditTextPassword.setText("");
+                mEditTextAddress.setText("");
+            }
+            Log.d(TAG, "POST response  - " + result);
+        }
+
+
+        @Override
+        protected String doInBackground(String... params) {
+
+            String userId = (String)params[0];
+            String userPassword = (String)params[1];
+            String userAddress = (String)params[2];
+
+            String serverURL = "http://192.168.1.167/insert.php";   //아이피 주소 연결
+            String postParameters = "userId=" + userId + "&userPassword=" + userPassword + "&userAddress=" + userAddress;   //파라미터 전달
+
+            try {
+                URL url = new URL(serverURL);
+                HttpURLConnection httpURLConnection = (HttpURLConnection) url.openConnection();
+
+
+                httpURLConnection.setReadTimeout(5000);
+                httpURLConnection.setConnectTimeout(5000);
+                httpURLConnection.setRequestMethod("POST"); //post방식으로 전송
+                //httpURLConnection.setRequestProperty("content-type", "application/json");
+                httpURLConnection.setDoInput(true);
+                httpURLConnection.connect();    //연결
+
+
+                OutputStream outputStream = httpURLConnection.getOutputStream();
+                outputStream.write(postParameters.getBytes("UTF-8"));
+                outputStream.flush();
+                outputStream.close();
+
+
+                int responseStatusCode = httpURLConnection.getResponseCode();
+                Log.d(TAG, "POST response code - " + responseStatusCode);
+
+                InputStream inputStream;
+                if(responseStatusCode == HttpURLConnection.HTTP_OK) {
+                    inputStream = httpURLConnection.getInputStream();
+                }
+                else{
+                    inputStream = httpURLConnection.getErrorStream();
+                }
+
+
+                InputStreamReader inputStreamReader = new InputStreamReader(inputStream, "UTF-8");
+                BufferedReader bufferedReader = new BufferedReader(inputStreamReader);
+
+                StringBuilder sb = new StringBuilder();
+                String line = null;
+
+                while((line = bufferedReader.readLine()) != null){
+                    sb.append(line);
+                }
+                bufferedReader.close();
+                return sb.toString();
+            } catch (Exception e) {
+
+                Log.d(TAG, "InsertData: Error ", e);
+                return new String("Error: " + e.getMessage());
+            }
+        }
     }
-
-    @Override
-    public void onNothingSelected(AdapterView<?> parent) {
-    }
-
-
+    public class LoginRequest extends StringRequest
 }
